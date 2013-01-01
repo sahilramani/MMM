@@ -7,9 +7,9 @@
  *
  */
 
-#include <cstddef>
-
 #pragma once
+
+#include <cstddef>
 
 // Lets define some constants for engine use
 
@@ -21,6 +21,10 @@
 #define u64 unsigned long long 
 
 #define TRACKER_UNIT  u32 
+
+// Currently supports 32-bit addresses
+// TODO: Add support for 64-bit addresses
+#define MEMORY_ADDRESS_SIZE u32
 
 
 // Memory to be tracked 
@@ -35,7 +39,7 @@ const u32 MEMORY_SIZE = _MB(32);
 const u16  CHUNK_SIZE = 1024;
 
 // Lets start building some useful values for use with our implementation
-const u32 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
+const u16 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
 
 // Tracker unit size : Refers to the actual tracker to manage memory
 //  4 bytes per TRACKER_UNIT means we'll be tracking upto 32 
@@ -43,6 +47,14 @@ const u32 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
 //  Also, that's about (32 * CHUNK_SIZE) bytes of data per tracker
 const u32 NUM_TRACKER_UNITS = ((MEMORY_SIZE)/((CHUNK_SIZE)*NUM_PAGES_PER_UNIT));
 
+// Allocation header : This sets up the header for memory to be used.
+//   Every memory block allocated will start with a header. 
+//   This gives us enough information regarding the allocation
+struct ALLOCATION_HEADER{
+	u32 size;
+	u8  alignment;
+};
+const u16 ALLOCATION_HEADER_SIZE = sizeof(ALLOCATION_HEADER);
 
 // MemManager : Actual memory manager implementation
 //  Singleton class used since we actually need only one instance 
@@ -52,6 +64,8 @@ class MemManager
 	
 public:
 	static MemManager* Instance();
+	
+	static void* Allocate(u32 size, u8 alignment);
 	
 private:
 	// Private constructor and destructor ensure singleton-ness
