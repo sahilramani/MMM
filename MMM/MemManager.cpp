@@ -65,6 +65,31 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 	
 	// And finally, the total size = header size + memory size
 	size += headerSize;
+		
+	u16 trackerID = FindUsableTrackingUnitID(size, alignment);
 	
+	// Set memory as used and return the address
+	MEMORY_ADDRESS tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID);
 	
+	// Fill out allocation header
+	memset((void*)((MEMORY_ADDRESS)tpMemory), 0, headerPaddingSize);
+	((ALLOCATION_HEADER*)(tpMemory + (MEMORY_ADDRESS)headerPaddingSize))->size			= size;
+	((ALLOCATION_HEADER*)(tpMemory + (MEMORY_ADDRESS)headerPaddingSize))->alignment	= alignment;
+	
+	// Return the actual memory location
+	return (void*)(tpMemory + (MEMORY_ADDRESS)headerPaddingSize);
+}
+
+u8 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
+{
+	// Calculate the required number of pages
+	// .. and then, total tracker units required.
+	// ... fail out if requested memory is more than the total memory.
+	
+	return (u8)0;
+}
+
+MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(u16 trackerID)
+{
+	return (MEMORY_ADDRESS)m_pMemory;
 }
