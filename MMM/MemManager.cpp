@@ -68,10 +68,11 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 	// And finally, the total size = header size + memory size
 	size += headerSize;
 		
-	u16 trackerID = FindUsableTrackingUnitID(size, alignment);
+	TRACKER_UNIT startFinalBitMask = (TRACKER_UNIT)0x0f;
+	u16 trackerID = FindUsableTrackingUnitID(size, alignment, startFinalBitMask);
 	
 	// Set memory as used and return the address
-	MEMORY_ADDRESS tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID);
+	MEMORY_ADDRESS tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID, size, startFinalBitMask);
 	
 	// Fill out allocation header
 	memset((void*)((MEMORY_ADDRESS)tpMemory), 0, headerPaddingSize);
@@ -84,7 +85,7 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 
 // Takes the size / alignment and finds the best location for the memory
 //   using only trackers. No memory involved yet. 
-u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
+u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , TRACKER_UNIT& startFinalBitMask)
 {
 	// Default fail tracker unit
 	u8 trackerID = -1;
@@ -183,17 +184,64 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
 				break;
 		}
 	}
+	
+	// Lets mark this as used for now, we'll remove it 
 	return (u8)trackerID;
 }
 
 // Returns the final memory address given a tracker id.
-MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID)
+MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID, const u32& size, const TRACKER_UNIT& startFinalBitMask)
 {
 	// Find the first usable memory page in the given tracker
 	TRACKER_UNIT shift_count = 0;
-	while ((trackerUnits[trackerID]>>shift_count) & 0x1f) {
+	while ((startFinalBitMask>>shift_count) & 0x1f) {
 		++shift_count;
 	}
 	
+	// Mark used pages in tracker
+	// .. and then, total tracker units required.
+	u32 numRequiredTrackerUnits = size / NUM_BYTES_PER_UNIT + 
+		( size % NUM_BYTES_PER_UNIT ) > 0 ? 1 : 0;
+	
+	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (size % CHUNK_SIZE));
+	
+	if(partialBitMask != startFinalBitMask) 
+	{
+		// Temporary:
+		u32 j=0;
+		
+		++numRequiredTrackerUnits;
+		
+		// Mark first tracker unit
+		trackerUnits[trackerID] &= startFinalBitMask;
+		
+		// Mark all but the last tracker unit
+		for (j=1; j<numRequiredTrackerUnits-1; j++) {
+			trackerUnits[trackerID+j] &= TRACKING_UNIT_ALL_USED;
+		}
+		
+		// Calculate how many bits need to be marked for the last unit.
+		TRACKER_UNIT last_shift_mask = 0;
+		j=shift_count;
+		while (((partialBitMask>>j)&(startFinalBitMask>>j)) != (partialBitMask>>j)) {
+			++j;
+			last_shift_mask<<=1;
+			++last_shift_mask;
+		}
+		
+		// Mark the last unit
+		trackerUnits[trackerID+numRequiredTrackerUnits-1] &= last_shift_mask;
+	}
+	else {
+		// Mark first tracker unit
+		trackerUnits[trackerID] &= startFinalBitMask;
+		
+		// Mark all but the last tracker unit
+		for (u32 j=1; j<numRequiredTrackerUnits; j++) {
+			trackerUnits[trackerID+j] &= TRACKING_UNIT_ALL_USED;
+		}
+		
+	}
+
 	return (MEMORY_ADDRESS)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
 }

@@ -37,8 +37,8 @@ private:
 	u8 *m_pMemory;
 	
 	// Internal methods
-	u16 FindUsableTrackingUnitID(const u32&, const u8& );
-	MEMORY_ADDRESS GetUsableMemoryAddressFromTrackerID(const u16& );
+	u16 FindUsableTrackingUnitID(const u32&, const u8& , TRACKER_UNIT&);
+	MEMORY_ADDRESS GetUsableMemoryAddressFromTrackerID(const u16& , const u32&, const TRACKER_UNIT&);
 	
 	// Internal values
 	ALLOCATION_STRATEGY m_AllocStrategy;
