@@ -146,7 +146,7 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
 							break;
 						}
 						else {
-							u32 shift_count = 1;
+							TRACKER_UNIT shift_count = 1;
 							// Calculate how many pages can fit in the first tracker unit
 							while((partialBitMask<<shift_count) && 
 								  (~trackerUnits[current_tracking_unit] & (partialBitMask<<shift_count) != partialBitMask))
@@ -157,16 +157,22 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
 							// Calculate the bitmask for the remaining pages needed.
 							TRACKER_UNIT secondPartialBitmask = TRACKING_UNIT_ALL_USED << (NUM_PAGES_PER_UNIT-shift_count);
 							
-							// Check to see if there's another page available
+							// Check to see if there's another page available and if it can store the remaining pages
 							if(((current_tracking_unit+j+1) < NUM_TRACKER_UNITS) && 
 							   (~trackerUnits[current_tracking_unit+j+1] & secondPartialBitmask != secondPartialBitmask))
 							{
 								trackerID = current_tracking_unit;
+								// We need one more tracking unit
+								// TODO : This isn't required actually, just for documentative clarity.
 								++numRequiredTrackerUnits;
 								break;
 							}
+							// If not, loop back. Rolling back should handle the all the pages used condition automatically
 							else
-							   continue;
+							{
+								current_tracking_unit += j;
+								continue;
+							}
 						}
 					}
 				}
@@ -183,5 +189,11 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment )
 // Returns the final memory address given a tracker id.
 MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID)
 {
-	return (MEMORY_ADDRESS)m_pMemory;
+	// Find the first usable memory page in the given tracker
+	TRACKER_UNIT shift_count = 0;
+	while ((trackerUnits[trackerID]>>shift_count) & 0x1f) {
+		++shift_count;
+	}
+	
+	return (MEMORY_ADDRESS)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
 }
