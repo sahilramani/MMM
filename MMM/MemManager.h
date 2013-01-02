@@ -22,6 +22,7 @@ public:
 	static MemManager* Instance();
 	
 	void* Allocate(u32 size, u8 alignment);
+	void SetAllocationStrategy(ALLOCATION_STRATEGY s);
 	
 private:
 	// Private constructor and destructor ensure singleton-ness
@@ -32,11 +33,14 @@ private:
 	static MemManager* m_pInstance; 
 	
 	// Memory and tracker units internal to the manager.
-	TRACKER_UNIT TRACKER_UNITS[NUM_TRACKER_UNITS];
+	TRACKER_UNIT trackerUnits[NUM_TRACKER_UNITS];
 	u8 *m_pMemory;
 	
 	// Internal methods
-	u8 FindUsableTrackingUnitID(const u32&, const u8& );
-	MEMORY_ADDRESS GetUsableMemoryAddressFromTrackerID(u16 );
+	u16 FindUsableTrackingUnitID(const u32&, const u8& );
+	MEMORY_ADDRESS GetUsableMemoryAddressFromTrackerID(const u16& );
+	
+	// Internal values
+	ALLOCATION_STRATEGY m_AllocStrategy;
 };
 

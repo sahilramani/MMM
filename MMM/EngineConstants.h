@@ -37,11 +37,19 @@ const u16  CHUNK_SIZE = 1024;
 // Lets start building some useful values for use with our implementation
 const u16 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
 
+// Captacity of each tracker unit in bytes
+const u32 NUM_BYTES_PER_UNIT = CHUNK_SIZE * NUM_PAGES_PER_UNIT;
+
+// Size of tracker unit in bytes
+const u16 TRACKER_UNIT_SIZE  = sizeof(TRACKER_UNIT);
+
+const TRACKER_UNIT TRACKING_UNIT_ALL_USED = (TRACKER_UNIT)0xffff;
+
 // Tracker unit size : Refers to the actual tracker to manage memory
 //  4 bytes per TRACKER_UNIT means we'll be tracking upto 32 
 //   different memory chunks per tracker unit.
 //  Also, that's about (32 * CHUNK_SIZE) bytes of data per tracker
-const u32 NUM_TRACKER_UNITS = ((MEMORY_SIZE)/((CHUNK_SIZE)*NUM_PAGES_PER_UNIT));
+const u32 NUM_TRACKER_UNITS = ((MEMORY_SIZE)/(NUM_BYTES_PER_UNIT));
 
 // Allocation header : This sets up the header for memory to be used.
 //   Every memory block allocated will start with a header. 
@@ -51,3 +59,12 @@ typedef struct _ALLOCATION_HEADER{
 	u8  alignment;
 }ALLOCATION_HEADER;
 const u16 ALLOCATION_HEADER_SIZE = sizeof(ALLOCATION_HEADER);
+
+// Allocation Strategy
+typedef enum _ALLOCATION_STRATEGY
+{
+	FIRST_FIT,
+	BEST_FIT,
+	WORST_FIT,
+	OPTIMAL_FIT
+}ALLOCATION_STRATEGY;
