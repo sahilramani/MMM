@@ -213,11 +213,11 @@ MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& tracke
 		++numRequiredTrackerUnits;
 		
 		// Mark first tracker unit
-		trackerUnits[trackerID] &= startFinalBitMask;
+		trackerUnits[trackerID] |= startFinalBitMask;
 		
 		// Mark all but the last tracker unit
 		for (j=1; j<numRequiredTrackerUnits-1; j++) {
-			trackerUnits[trackerID+j] &= TRACKING_UNIT_ALL_USED;
+			trackerUnits[trackerID+j] |= TRACKING_UNIT_ALL_USED;
 		}
 		
 		// Calculate how many bits need to be marked for the last unit.
@@ -230,18 +230,81 @@ MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& tracke
 		}
 		
 		// Mark the last unit
-		trackerUnits[trackerID+numRequiredTrackerUnits-1] &= last_shift_mask;
+		trackerUnits[trackerID+numRequiredTrackerUnits-1] |= last_shift_mask;
 	}
 	else {
 		// Mark first tracker unit
-		trackerUnits[trackerID] &= startFinalBitMask;
+		trackerUnits[trackerID] |= startFinalBitMask;
 		
 		// Mark all but the last tracker unit
 		for (u32 j=1; j<numRequiredTrackerUnits; j++) {
-			trackerUnits[trackerID+j] &= TRACKING_UNIT_ALL_USED;
+			trackerUnits[trackerID+j] |= TRACKING_UNIT_ALL_USED;
 		}
 		
 	}
 
 	return (MEMORY_ADDRESS)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
+}
+
+// Let's also free this memory now
+void MemManager::DeAllocate(void *pMemory)
+{
+	// The header is just before the memory address in the scheme of things
+	u32 size = ((ALLOCATION_HEADER*)((MEMORY_ADDRESS*)pMemory-ALLOCATION_HEADER_SIZE))->size;
+	u32 alignment = ((ALLOCATION_HEADER*)((MEMORY_ADDRESS*)pMemory-ALLOCATION_HEADER_SIZE))->alignment;
+	
+	// Now, to calculate the true starting point of used memory, we need to calculate
+	//  the padding used for the header
+	u32 headerPaddingSize = (ALLOCATION_HEADER_SIZE % alignment > 0) ? alignment - (ALLOCATION_HEADER_SIZE % alignment) : 0;
+	
+	// Calculate the true start memory location
+	pMemory = (MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS)ALLOCATION_HEADER_SIZE - (MEMORY_ADDRESS)headerPaddingSize;
+	
+	// Calculate and store the partialBitMask and the number of tracker units used
+	u32 numRequiredTrackerUnits = (size / NUM_BYTES_PER_UNIT) + ((size % NUM_BYTES_PER_UNIT) > 0 ? 1 : 0);
+	
+	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (size % CHUNK_SIZE)); 
+	TRACKER_UNIT memoryBitMask  = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << 
+												 ((MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory) % CHUNK_SIZE);
+	
+	u32 startTrackerID = ((MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory) / CHUNK_SIZE;
+	
+	if(partialBitMask != memoryBitMask)
+	{
+		// There was adjustment, handle that
+		if(partialBitMask > memoryBitMask)
+		{
+			// Adjustment was to the left, that means there were fewer units remaining, 
+			//  so there was one unit added at the end
+			++numRequiredTrackerUnits;
+			TRACKER_UNIT lastUnitBitMask = (TRACKER_UNIT)0x0f;
+			while (partialBitMask && partialBitMask != memoryBitMask) {
+				lastUnitBitMask <<= 1;
+				++lastUnitBitMask;
+				partialBitMask <<= 1;
+			}
+			
+			if(partialBitMask)
+			{
+				//printf("Something bad happened, bitmask shouldn't be empty");
+				return;
+			}
+			
+			// Mark the first tracker unit as unused
+			trackerUnits[startTrackerID] &= ~partialBitMask;
+			
+			// Mark all but the last tracker unit as unused
+			for(int j=1; j<numRequiredTrackerUnits-1; j++)
+				trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
+			
+			// For the last unit, mark using lastUnitBitMask
+			trackerUnits[numRequiredTrackerUnits-1] &= ~lastUnitBitMask;
+		}
+	}
+	else {
+		trackerUnits[startTrackerID] &= ~partialBitMask;
+		for(int j=1; j<numRequiredTrackerUnits; j++)
+			trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
+	}
+
 }

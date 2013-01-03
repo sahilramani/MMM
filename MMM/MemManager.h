@@ -21,9 +21,10 @@ class MemManager
 public:
 	static MemManager* Instance();
 	
-	void* Allocate(u32 size, u8 alignment);
-	void SetAllocationStrategy(ALLOCATION_STRATEGY s);
+	void* Allocate(u32 , u8 );
+	void SetAllocationStrategy(ALLOCATION_STRATEGY );
 	
+	void DeAllocate(void * ); 
 private:
 	// Private constructor and destructor ensure singleton-ness
 	MemManager();
