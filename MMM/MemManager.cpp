@@ -143,7 +143,23 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 						{
 							// We can fit the partial bitmask into the first tracker unit, 
 							// so we're basically done here.
+							
+							if(partialBitMask < ~trackerUnits[current_tracking_unit])
+							{
+								do{
+									partialBitMask = partialBitMask | (partialBitMask >> 1);
+								}while (~trackerUnits[current_tracking_unit] != partialBitMask && 
+										partialBitMask != TRACKING_UNIT_ALL_USED) ;
+								
+								if(partialBitMask == TRACKING_UNIT_ALL_USED)
+								{
+									//cout<<" This is an error.";
+									break;
+								}
+								
+							}
 							trackerID = current_tracking_unit;
+							startFinalBitMask = partialBitMask;
 							break;
 						}
 						else {
@@ -163,6 +179,7 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							   (~trackerUnits[current_tracking_unit+j+1] & secondPartialBitmask != secondPartialBitmask))
 							{
 								trackerID = current_tracking_unit;
+								startFinalBitMask = partialBitMask;
 								// We need one more tracking unit
 								// TODO : This isn't required actually, just for documentative clarity.
 								++numRequiredTrackerUnits;
@@ -209,28 +226,55 @@ MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& tracke
 	{
 		// Temporary:
 		u32 j=0;
+
+		// NOTE : What if there's extra space, we'll probably be wasting it.
+		//        So lets do one additional check. If the free units in the tracker 
+		//        is greater than the partialBitMask, then we have more spaces than 
+		//        we need. 
 		
-		++numRequiredTrackerUnits;
-		
-		// Mark first tracker unit
-		trackerUnits[trackerID] |= startFinalBitMask;
-		
-		// Mark all but the last tracker unit
-		for (j=1; j<numRequiredTrackerUnits-1; j++) {
-			trackerUnits[trackerID+j] |= TRACKING_UNIT_ALL_USED;
+		if(startFinalBitMask < ~trackerUnits[trackerID])
+		{
+			
+				u8 last_unshift_count = 0;
+				do{
+					++last_unshift_count;
+					partialBitMask = partialBitMask | (partialBitMask >> 1);
+				}while (~trackerUnits[trackerID] != partialBitMask && 
+						partialBitMask != TRACKING_UNIT_ALL_USED) ;
+				
+				if(partialBitMask == TRACKING_UNIT_ALL_USED)
+				{
+					//cout<<" THis is an error.";
+					//break;
+				}
+				
+				trackerUnits[trackerID + numRequiredTrackerUnits - 1] |= 
+						~(TRACKING_UNIT_ALL_USED << last_unshift_count);
 		}
+		else
+		{
+			++numRequiredTrackerUnits;
 		
-		// Calculate how many bits need to be marked for the last unit.
-		TRACKER_UNIT last_shift_mask = 0;
-		j=shift_count;
-		while (((partialBitMask>>j)&(startFinalBitMask>>j)) != (partialBitMask>>j)) {
-			++j;
-			last_shift_mask<<=1;
-			++last_shift_mask;
+			// Mark first tracker unit
+			trackerUnits[trackerID] |= startFinalBitMask;
+		
+			// Mark all but the last tracker unit
+			for (j=1; j<numRequiredTrackerUnits-1; j++) {
+				trackerUnits[trackerID+j] |= TRACKING_UNIT_ALL_USED;
+			}
+		
+			// Calculate how many bits need to be marked for the last unit.
+			TRACKER_UNIT last_shift_mask = 0;
+			j=shift_count;
+			while (((partialBitMask>>j)&(startFinalBitMask>>j)) != (partialBitMask>>j)) {
+				++j;
+				last_shift_mask<<=1;
+				++last_shift_mask;
+			}
+		
+			// Mark the last unit
+			trackerUnits[trackerID+numRequiredTrackerUnits-1] |= last_shift_mask;
 		}
-		
-		// Mark the last unit
-		trackerUnits[trackerID+numRequiredTrackerUnits-1] |= last_shift_mask;
 	}
 	else {
 		// Mark first tracker unit
@@ -300,6 +344,33 @@ void MemManager::DeAllocate(void *pMemory)
 			// For the last unit, mark using lastUnitBitMask
 			trackerUnits[numRequiredTrackerUnits-1] &= ~lastUnitBitMask;
 		}
+		else {
+			// Adjustment was to the right, that means there were more units remaining
+			//  so there was a reduction in the last 
+			u8 last_unshift_count=0;
+			do {
+				++last_unshift_count;
+				partialBitMask = partialBitMask | (partialBitMask >> 1);
+			} while (~trackerUnits[startTrackerID] != partialBitMask && 
+					 partialBitMask != TRACKING_UNIT_ALL_USED) ;
+			
+			if(partialBitMask == TRACKING_UNIT_ALL_USED)
+			{
+				//cout<<" THis is an error.";
+				//break;
+			}
+			
+			// Mark the first tracker unit as unused
+			trackerUnits[startTrackerID] &= ~partialBitMask;
+			
+			// Mark all but the last tracker unit as unused
+			for(int j=1; j<numRequiredTrackerUnits-1; j++)
+				trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
+			
+			// For the last unit, mark using lastUnitBitMask
+			trackerUnits[numRequiredTrackerUnits-1] &= ~(TRACKING_UNIT_ALL_USED << last_unshift_count);
+		}
+
 	}
 	else {
 		trackerUnits[startTrackerID] &= ~partialBitMask;
