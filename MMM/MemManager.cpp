@@ -68,14 +68,14 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 	// And finally, the total size = header size + memory size
 	size += headerSize;
 		
-	TRACKER_UNIT startFinalBitMask = (TRACKER_UNIT)0x0f;
+	TRACKER_UNIT startFinalBitMask = (TRACKER_UNIT)0x0;
 	u16 trackerID = FindUsableTrackingUnitID(size, alignment, startFinalBitMask);
 	
 	// Set memory as used and return the address
-	MEMORY_ADDRESS tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID, size, startFinalBitMask);
+	MEMORY_ADDRESS* tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID, size, startFinalBitMask);
 	
 	// Fill out allocation header
-	memset((void*)((MEMORY_ADDRESS)tpMemory), 0, headerPaddingSize);
+	memset((void*)(tpMemory), 0, headerPaddingSize);
 	((ALLOCATION_HEADER*)(tpMemory + (MEMORY_ADDRESS)headerPaddingSize))->size			= size;
 	((ALLOCATION_HEADER*)(tpMemory + (MEMORY_ADDRESS)headerPaddingSize))->alignment		= alignment;
 	
@@ -88,20 +88,20 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , TRACKER_UNIT& startFinalBitMask)
 {
 	// Default fail tracker unit
-	u8 trackerID = -1;
+	u16 trackerID = 0;
 
 	// Calculate the required number of pages
-	u32 numRequiredPages = size / CHUNK_SIZE + (size % CHUNK_SIZE) > 0 ? 1 : 0;
+	u32 numRequiredPages = size / CHUNK_SIZE + ((size % CHUNK_SIZE) > 0 ? 1 : 0);
 	
 	// .. and then, total tracker units required.
-	u32 numRequiredTrackerUnits = numRequiredPages / TRACKER_UNIT_SIZE + 
-								( numRequiredPages % TRACKER_UNIT_SIZE ) > 0 ? 1 : 0;
+	u32 numRequiredTrackerUnits = numRequiredPages / NUM_PAGES_PER_UNIT + 
+								(( numRequiredPages % NUM_PAGES_PER_UNIT ) > 0 ? 1 : 0);
 	
 	// ... fail out if requested memory is more than the total memory.
 	if(numRequiredTrackerUnits <= NUM_TRACKER_UNITS)
 	{
-		// If not, let's build a bitmask.
-		TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (size % CHUNK_SIZE));
+		// If not, let's build a bitmask.ges
+		TRACKER_UNIT partialBitMask = (TRACKER_UNIT)((TRACKING_UNIT_ALL_USED << (NUM_PAGES_PER_UNIT - (numRequiredPages % NUM_PAGES_PER_UNIT))));
 
 		// To keep track of the current tracking unit being checked
 		u16 current_tracking_unit=0;
@@ -146,10 +146,20 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							
 							if(partialBitMask < ~trackerUnits[current_tracking_unit])
 							{
-								do{
-									partialBitMask = partialBitMask | (partialBitMask >> 1);
-								}while (~trackerUnits[current_tracking_unit] != partialBitMask && 
-										partialBitMask != TRACKING_UNIT_ALL_USED) ;
+								if(numRequiredTrackerUnits == 1)
+								{
+									do{
+										partialBitMask >>= 1;
+									}while (~trackerUnits[current_tracking_unit] & partialBitMask == partialBitMask && 
+											partialBitMask != TRACKING_UNIT_ALL_USED) ;
+								}
+								else {
+									do{
+										partialBitMask = partialBitMask | (partialBitMask >> 1);
+									}while (~trackerUnits[current_tracking_unit] & partialBitMask == partialBitMask && 
+											partialBitMask == TRACKING_UNIT_ALL_USED) ;
+								}
+
 								
 								if(partialBitMask == TRACKING_UNIT_ALL_USED)
 								{
@@ -207,7 +217,7 @@ u16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 }
 
 // Returns the final memory address given a tracker id.
-MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID, const u32& size, const TRACKER_UNIT& startFinalBitMask)
+MEMORY_ADDRESS* MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID, const u32& size, const TRACKER_UNIT& startFinalBitMask)
 {
 	// Find the first usable memory page in the given tracker
 	TRACKER_UNIT shift_count = 0;
@@ -287,7 +297,7 @@ MEMORY_ADDRESS MemManager::GetUsableMemoryAddressFromTrackerID(const u16& tracke
 		
 	}
 
-	return (MEMORY_ADDRESS)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
+	return (MEMORY_ADDRESS*)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
 }
 
 // Let's also free this memory now

@@ -11,9 +11,9 @@
 
 #define _MB(size) ((size)*1024*1024)
 
-#define u8  char
-#define u16 unsigned 
-#define u32 unsigned long 
+#define u8  unsigned char
+#define u16 unsigned short
+#define u32 unsigned int 
 #define u64 unsigned long long 
 
 #define TRACKER_UNIT  u32 
@@ -40,10 +40,7 @@ const u16 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
 // Captacity of each tracker unit in bytes
 const u32 NUM_BYTES_PER_UNIT = CHUNK_SIZE * NUM_PAGES_PER_UNIT;
 
-// Size of tracker unit in bytes
-const u16 TRACKER_UNIT_SIZE  = sizeof(TRACKER_UNIT);
-
-const TRACKER_UNIT TRACKING_UNIT_ALL_USED = (TRACKER_UNIT)0xffff;
+const TRACKER_UNIT TRACKING_UNIT_ALL_USED = (TRACKER_UNIT)0xffffffff;
 
 // Tracker unit size : Refers to the actual tracker to manage memory
 //  4 bytes per TRACKER_UNIT means we'll be tracking upto 32 
