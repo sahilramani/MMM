@@ -16,6 +16,11 @@
 #define u32 unsigned int 
 #define u64 unsigned long long 
 
+#define s8  char
+#define s16 short
+#define s32 int
+#define s64 long long
+
 #define TRACKER_UNIT  u32 
 
 // Currently supports 32-bit addresses
