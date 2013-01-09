@@ -25,7 +25,7 @@
 
 // Currently supports 32-bit addresses
 // TODO: Add support for 64-bit addresses
-#define MEMORY_ADDRESS u32
+#define MEMORY_ADDRESS u64
 
 
 // Memory to be tracked 
@@ -45,7 +45,7 @@ const u16 NUM_PAGES_PER_UNIT = 8*sizeof(TRACKER_UNIT);
 // Captacity of each tracker unit in bytes
 const u32 NUM_BYTES_PER_UNIT = CHUNK_SIZE * NUM_PAGES_PER_UNIT;
 
-const TRACKER_UNIT TRACKING_UNIT_ALL_USED = (TRACKER_UNIT)0xffffffff;
+const TRACKER_UNIT TRACKING_UNIT_ALL_USED = (TRACKER_UNIT)0xffffffffffffffff;
 
 // Tracker unit size : Refers to the actual tracker to manage memory
 //  4 bytes per TRACKER_UNIT means we'll be tracking upto 32 

@@ -69,7 +69,8 @@ void* MemManager::Allocate(u32 size, u8 alignment)
 	size += headerSize;
 		
 	TRACKER_UNIT startFinalBitMask = (TRACKER_UNIT)0x0;
-	u16 trackerID = FindUsableTrackingUnitID(size, alignment, startFinalBitMask);
+	s16 trackerID = FindUsableTrackingUnitID(size, alignment, startFinalBitMask);
+	if(trackerID == -1) return NULL;
 	
 	// Set memory as used and return the address
 	MEMORY_ADDRESS* tpMemory = GetUsableMemoryAddressFromTrackerID(trackerID, startFinalBitMask);
@@ -114,19 +115,20 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 			while(true)
 			{
 				// Find first tracker unit with empty slots
-				while (trackerUnits[current_tracking_unit] & TRACKING_UNIT_ALL_USED == TRACKING_UNIT_ALL_USED) {
+				while (trackerUnits[current_tracking_unit] == TRACKING_UNIT_ALL_USED) {
 					current_tracking_unit++;
 				}
 				
-				// Fail out if we can't find even one. This probably means we've exhausted memory
-				if( current_tracking_unit >= NUM_TRACKER_UNITS)
+				// Fail out if we can't find enough trackers. This probably means we've exhausted memory
+				// Negative one ensures the current tracker is also considered
+				if( (current_tracking_unit + numRequiredTrackerUnits -1) >= NUM_TRACKER_UNITS)
 					break;
 				else {
 					
 					if(numRequiredTrackerUnits == 1)
 					{
 						// We only need one tracking unit for the requested memory (or so we think, for now)
-						if (~trackerUnits[current_tracking_unit] & partialBitMask == partialBitMask) {
+						if (((~trackerUnits[current_tracking_unit]) & partialBitMask) == partialBitMask) {
 							// The current unit has enough spaces for the entire memory, so we have a winner. 
 							// Now, let's adjust the memory to fit appropriately
 							
@@ -140,7 +142,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 								do
 								{
 									partialBitMask >>= 1;
-								}while (partialBitMask & ~trackerUnits[current_tracking_unit] == partialBitMask);
+								}while ((partialBitMask & ~trackerUnits[current_tracking_unit]) == partialBitMask);
 								
 								// Oops, we crossed one, let's shift back.
 								partialBitMask <<= 1;
@@ -157,7 +159,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							// Let's just safely do the first shift, so we can continue...
 							last_unit_bitmask = 1;
 							partialBitMask <<=1;
-							while (partialBitMask & ~trackerUnits[current_tracking_unit] != partialBitMask) {
+							while ((partialBitMask & ~trackerUnits[current_tracking_unit]) != partialBitMask) {
 								partialBitMask <<= 1;
 								last_unit_bitmask |= (last_unit_bitmask<<1) ;
 							}
@@ -181,6 +183,9 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							// Lets calculate the bitmask for the additional slot required for this allocation.
 							++numRequiredTrackerUnits;
 							
+							// Check for overflow
+							if(current_tracking_unit + numRequiredTrackerUnits > NUM_TRACKER_UNITS ) return NULL;
+							
 							// Let's just safely do the first shift, so we can continue...
 							last_unit_bitmask = 1;
 							partialBitMask <<=1;
@@ -190,11 +195,31 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							}
 						}
 						else {
-							last_unit_bitmask = partialBitMask;
+							TRACKER_UNIT tempBitMask = partialBitMask;
 							partialBitMask = ~trackerUnits[current_tracking_unit];
-							while (!(last_unit_bitmask & 1)) {
-								last_unit_bitmask >>= 1;
+							// If first tracker is empty
+							if (!trackerUnits[current_tracking_unit]) {
+								// While the first set bit is not the last
+								while(!(tempBitMask & 1))
+								{
+									tempBitMask >>=1;
+								}
 							}
+							else {
+								// While we get zeros for ANDing both tempBitMask and partialBitMask.. we keep shifting
+								// Basically,	1000 & 0001 = 0
+								//				0100 & 0001 = 0
+								//				0010 & 0001 = 0
+								//				0001 & 0001 = 1; viola!
+								while (!(tempBitMask & trackerUnits[current_tracking_unit])) {
+									tempBitMask >>= 1;
+								}
+								// Because this is the last value, we need to shift back to find the last empty slot
+								tempBitMask <<= 1;
+							}
+
+							last_unit_bitmask  = tempBitMask | trackerUnits[current_tracking_unit];
+							
 						}
 						u32 j=0;
 						for (; j<numRequiredTrackerUnits-1; j++) {
@@ -251,8 +276,10 @@ void MemManager::MarkMemoryAddressUsed(const u16& trackerID, const TRACKER_UNIT&
 MEMORY_ADDRESS* MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID, const TRACKER_UNIT& startFinalBitMask)
 {
 	u32 shift_count = 0;
-	while (!(startFinalBitMask& (0x1<<shift_count))) {
-		++shift_count;
+	if (~startFinalBitMask) {
+		while (!(startFinalBitMask& (0x1<<shift_count))) {
+			++shift_count;
+		}
 	}
 	return (MEMORY_ADDRESS*)(m_pMemory + trackerID * NUM_BYTES_PER_UNIT + shift_count * CHUNK_SIZE);
 }
@@ -275,15 +302,14 @@ void MemManager::DeAllocate(void *pMemory)
 	u32 numRequiredTrackerUnits = (size / NUM_BYTES_PER_UNIT) + ((size % NUM_BYTES_PER_UNIT) > 0 ? 1 : 0);
 	u32 numRequiredPages = size / CHUNK_SIZE + ((size % CHUNK_SIZE)>0 ? 1 : 0);
 
-	MEMORY_ADDRESS memoryOffset = (MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory;
-	u32 offsetNumRequiredPages = (memoryOffset + size) / CHUNK_SIZE + (((memoryOffset + size) % CHUNK_SIZE)>0 ? 1 : 0);
-
-	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (numRequiredPages % NUM_PAGES_PER_UNIT)); 
+	// We must understand that pointer differences tell us the number of values stored in the particular object 
+	//  size. Hence multiplying it with the size gives us the true byte difference.
+	MEMORY_ADDRESS memoryOffset = ((MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory ) * sizeof(MEMORY_ADDRESS);
+	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (NUM_PAGES_PER_UNIT - numRequiredPages % NUM_PAGES_PER_UNIT)); 
 	TRACKER_UNIT memoryBitMask  = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << 
-												 (offsetNumRequiredPages % NUM_PAGES_PER_UNIT));
-												 //(((MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory) % NUM_BYTES_PER_UNIT));
+												 ((memoryOffset % NUM_BYTES_PER_UNIT) / CHUNK_SIZE));
 	
-	u32 startTrackerID = memoryOffset / CHUNK_SIZE;
+	u32 startTrackerID = memoryOffset / NUM_BYTES_PER_UNIT;
 	
 	if(partialBitMask != memoryBitMask)
 	{
@@ -340,7 +366,7 @@ void MemManager::DeAllocate(void *pMemory)
 				trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
 			
 			// For the last unit, mark using lastUnitBitMask
-			trackerUnits[numRequiredTrackerUnits-1] &= ~(TRACKING_UNIT_ALL_USED << last_unshift_count);
+			trackerUnits[numRequiredTrackerUnits-1] &= ~(TRACKING_UNIT_ALL_USED >> last_unshift_count);
 		}
 
 	}
