@@ -264,7 +264,8 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 
 void MemManager::MarkMemoryAddressUsed(const u16& trackerID, const TRACKER_UNIT& startBitMask, const u32& numTrackerUnits, const TRACKER_UNIT& finalBitMask)
 {
-	trackerUnits[trackerID] |= startBitMask;
+	// Need this because if startBitMask == 0, all the pages in the tracking unit were used.
+	trackerUnits[trackerID] |= (startBitMask>0?startBitMask:TRACKING_UNIT_ALL_USED);
 	for (u32 j=1; j<numTrackerUnits-1; j++) {
 		trackerUnits[trackerID + j] |= TRACKING_UNIT_ALL_USED;
 	}
@@ -276,7 +277,9 @@ void MemManager::MarkMemoryAddressUsed(const u16& trackerID, const TRACKER_UNIT&
 MEMORY_ADDRESS* MemManager::GetUsableMemoryAddressFromTrackerID(const u16& trackerID, const TRACKER_UNIT& startFinalBitMask)
 {
 	u32 shift_count = 0;
-	if (~startFinalBitMask) {
+	// Need this because if startBitMask == 0, all the pages in the tracking unit were used.
+	
+	if (startFinalBitMask && ~startFinalBitMask) {
 		while (!(startFinalBitMask& (0x1<<shift_count))) {
 			++shift_count;
 		}

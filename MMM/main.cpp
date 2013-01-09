@@ -11,7 +11,7 @@ int main (int argc, char * const argv[]) {
     
 	for(int i=0;i<num_elements;i++)
 	{
-		ptr[i] = MemManager::Instance()->Allocate((1024 * 32 - 4), 4);
+		ptr[i] = MemManager::Instance()->Allocate((1024 * 32 - 40), 4);
 		if(!(ptr[i]))	num_failed++; 
 		else			num_alloc++;
 
