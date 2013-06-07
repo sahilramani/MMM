@@ -39,13 +39,16 @@ MemManager::~MemManager()
 	// TODO : Find a generic way to "place" memory. 
 	//        Basically find memory that can be used based on platform.
 	//  * The use of new here is temporary and should not be considered final *
-	if(m_pMemory) delete [] m_pMemory;
+	if(m_pMemory) { 
+		delete [] m_pMemory;
+	}
 }
 
 MemManager* MemManager::Instance()
 {
-	if(!m_pInstance)
+	if(!m_pInstance) {
 		m_pInstance = new MemManager();
+	}
 	
 	return m_pInstance;
 }
@@ -103,8 +106,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 	TRACKER_UNIT last_unit_bitmask = TRACKING_UNIT_ALL_USED;
 	
 	// ... fail out if requested memory is more than the total memory.
-	if(numRequiredTrackerUnits <= NUM_TRACKER_UNITS)
-	{
+	if(numRequiredTrackerUnits <= NUM_TRACKER_UNITS) {
 		// If not, let's build a bitmask.ges
 		TRACKER_UNIT partialBitMask = (TRACKER_UNIT)((TRACKING_UNIT_ALL_USED << (NUM_PAGES_PER_UNIT - (numRequiredPages % NUM_PAGES_PER_UNIT))));
 
@@ -112,8 +114,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 		switch (m_AllocStrategy) {
 			case FIRST_FIT:
 				
-			while(true)
-			{
+			while(true) {
 				// Find first tracker unit with empty slots
 				while (trackerUnits[current_tracking_unit] == TRACKING_UNIT_ALL_USED) {
 					current_tracking_unit++;
@@ -121,12 +122,11 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 				
 				// Fail out if we can't find enough trackers. This probably means we've exhausted memory
 				// Negative one ensures the current tracker is also considered
-				if( (current_tracking_unit + numRequiredTrackerUnits -1) >= NUM_TRACKER_UNITS)
+				if( (current_tracking_unit + numRequiredTrackerUnits -1) >= NUM_TRACKER_UNITS) {
 					break;
-				else {
+				} else {
 					
-					if(numRequiredTrackerUnits == 1)
-					{
+					if(numRequiredTrackerUnits == 1) {
 						// We only need one tracking unit for the requested memory (or so we think, for now)
 						if (((~trackerUnits[current_tracking_unit]) & partialBitMask) == partialBitMask) {
 							// The current unit has enough spaces for the entire memory, so we have a winner. 
@@ -135,14 +135,12 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							if (!trackerUnits[current_tracking_unit]) {
 								// Tracker unit empty, let's just fit at the start, this is easy
 								partialBitMask = ~(TRACKING_UNIT_ALL_USED << numRequiredPages);
-							}
-							else {
+							} else {
 								// This is tricky. The tracking unit isn't empty, so shift right 
 								//  till we can find the appropriate location 
-								do
-								{
+								do {
 									partialBitMask >>= 1;
-								}while ((partialBitMask & ~trackerUnits[current_tracking_unit]) == partialBitMask);
+								} while ((partialBitMask & ~trackerUnits[current_tracking_unit]) == partialBitMask);
 								
 								// Oops, we crossed one, let's shift back.
 								partialBitMask <<= 1;
@@ -150,8 +148,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							trackerID = current_tracking_unit;
 							startFinalBitMask = partialBitMask;
 							break;
-						}
-						else {
+						} else {
 							// The tracker unit doesn't have enough to fill the requested memory, but has 
 							//  enough to fill some.
 							++numRequiredTrackerUnits;
@@ -172,8 +169,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							break;
 						}
 
-					}
-					else {
+					} else {
 						// We need more than one tracking unit to fit the requested memory
 						last_unit_bitmask = TRACKING_UNIT_ALL_USED;
 						
@@ -193,19 +189,16 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 								partialBitMask <<= 1;
 								last_unit_bitmask |= (last_unit_bitmask<<1) ;
 							}
-						}
-						else {
+						} else {
 							TRACKER_UNIT tempBitMask = partialBitMask;
 							partialBitMask = ~trackerUnits[current_tracking_unit];
 							// If first tracker is empty
 							if (!trackerUnits[current_tracking_unit]) {
 								// While the first set bit is not the last
-								while(!(tempBitMask & 1))
-								{
+								while(!(tempBitMask & 1)) {
 									tempBitMask >>=1;
 								}
-							}
-							else {
+							} else {
 								// While we get zeros for ANDing both tempBitMask and partialBitMask.. we keep shifting
 								// Basically,	1000 & 0001 = 0
 								//				0100 & 0001 = 0
@@ -219,7 +212,6 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 							}
 
 							last_unit_bitmask  = tempBitMask | trackerUnits[current_tracking_unit];
-							
 						}
 						u32 j=0;
 						for (; j<numRequiredTrackerUnits-1; j++) {
@@ -231,29 +223,25 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 						// We couldn't find enough units to satisfy n-1 tracker unit's worth pages
 						if ((j!= numRequiredTrackerUnits-1) || 
 							(~trackerUnits[current_tracking_unit + numRequiredTrackerUnits - 1] 
-											& TRACKING_UNIT_ALL_USED != TRACKING_UNIT_ALL_USED)) 
-						{
+								& TRACKING_UNIT_ALL_USED != TRACKING_UNIT_ALL_USED))  {
 							continue;
 						}
 						
 						// If not, we have a winner...
 						trackerID = current_tracking_unit;
 						startFinalBitMask = partialBitMask;
-
 						
 						break;
 					}
-
 				}
 			}
 			break;
-						
+	
 			default:
 				break;
 		}
 	}
-	
-	
+		
 	// Lets mark units as used if we found something.
 	if (trackerID != -1) {
 		MarkMemoryAddressUsed(current_tracking_unit, startFinalBitMask, numRequiredTrackerUnits, last_unit_bitmask);
@@ -269,8 +257,9 @@ void MemManager::MarkMemoryAddressUsed(const u16& trackerID, const TRACKER_UNIT&
 	for (u32 j=1; j<numTrackerUnits-1; j++) {
 		trackerUnits[trackerID + j] |= TRACKING_UNIT_ALL_USED;
 	}
-	if(numTrackerUnits > 1)
+	if(numTrackerUnits > 1) {
 		trackerUnits[trackerID+numTrackerUnits-1] |= finalBitMask;
+	}
 }
 
 // Returns the final memory address given a tracker id.
@@ -314,11 +303,9 @@ void MemManager::DeAllocate(void *pMemory)
 	
 	u32 startTrackerID = memoryOffset / NUM_BYTES_PER_UNIT;
 	
-	if(partialBitMask != memoryBitMask)
-	{
+	if(partialBitMask != memoryBitMask) {
 		// There was adjustment, handle that
-		if(partialBitMask > memoryBitMask)
-		{
+		if(partialBitMask > memoryBitMask) {
 			// Adjustment was to the left, that means there were fewer units remaining, 
 			//  so there was one unit added at the end
 			++numRequiredTrackerUnits;
@@ -329,8 +316,7 @@ void MemManager::DeAllocate(void *pMemory)
 				partialBitMask <<= 1;
 			}
 			
-			if(partialBitMask)
-			{
+			if(partialBitMask) {
 				//printf("Something bad happened, bitmask shouldn't be empty");
 				return;
 			}
@@ -344,8 +330,7 @@ void MemManager::DeAllocate(void *pMemory)
 			
 			// For the last unit, mark using lastUnitBitMask
 			trackerUnits[numRequiredTrackerUnits-1] &= ~lastUnitBitMask;
-		}
-		else {
+		} else {
 			// Adjustment was to the right, that means there were more units remaining
 			//  so there was a reduction in the last 
 			u8 last_unshift_count=0;
@@ -355,8 +340,7 @@ void MemManager::DeAllocate(void *pMemory)
 			} while (~trackerUnits[startTrackerID] != partialBitMask && 
 					 partialBitMask != TRACKING_UNIT_ALL_USED) ;
 			
-			if(partialBitMask == TRACKING_UNIT_ALL_USED)
-			{
+			if(partialBitMask == TRACKING_UNIT_ALL_USED) {
 				//cout<<" THis is an error.";
 				//break;
 			}
@@ -365,18 +349,19 @@ void MemManager::DeAllocate(void *pMemory)
 			trackerUnits[startTrackerID] &= ~partialBitMask;
 			
 			// Mark all but the last tracker unit as unused
-			for(int j=1; j<numRequiredTrackerUnits-1; j++)
+			for(int j=1; j<numRequiredTrackerUnits-1; j++) {
 				trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
-			
+			}
+
 			// For the last unit, mark using lastUnitBitMask
 			trackerUnits[numRequiredTrackerUnits-1] &= ~(TRACKING_UNIT_ALL_USED >> last_unshift_count);
 		}
 
-	}
-	else {
+	} else {
 		trackerUnits[startTrackerID] &= partialBitMask;
-		for(int j=1; j<numRequiredTrackerUnits; j++)
+		for(int j=1; j<numRequiredTrackerUnits; j++) {
 			trackerUnits[startTrackerID + j] &= ~(TRACKING_UNIT_ALL_USED);
+		}
 	}
 
 }
