@@ -1,3 +1,7 @@
 MMM/build/
 .DS_Store
 MMM.xcodeproj/
+Debug/
+Release/
+*/*vcxproj*
+*/*.suo

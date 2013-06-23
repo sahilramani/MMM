@@ -173,7 +173,7 @@ s16 MemManager::FindUsableTrackingUnitID(const u32& size, const u8& alignment , 
 						// We need more than one tracking unit to fit the requested memory
 						last_unit_bitmask = TRACKING_UNIT_ALL_USED;
 						
-						if (~trackerUnits[current_tracking_unit] & partialBitMask != partialBitMask) {
+						if ((~trackerUnits[current_tracking_unit] & partialBitMask) != partialBitMask) {
 							// The first tracker cannot the partial memory requested
 							// This means there's fewer slots. 
 							// Lets calculate the bitmask for the additional slot required for this allocation.
@@ -286,23 +286,27 @@ void MemManager::DeAllocate(void *pMemory)
 	// Now, to calculate the true starting point of used memory, we need to calculate
 	//  the padding used for the header
 	u32 headerPaddingSize = (ALLOCATION_HEADER_SIZE % alignment > 0) ? alignment - (ALLOCATION_HEADER_SIZE % alignment) : 0;
-	
+
 	// Calculate the true start memory location
 	pMemory = (MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS)ALLOCATION_HEADER_SIZE - (MEMORY_ADDRESS)headerPaddingSize;
+
+	// And adjust the total size 
+	size += ALLOCATION_HEADER_SIZE + headerPaddingSize;
 	
 	// Calculate and store the partialBitMask and the number of tracker units used
 	u32 numRequiredTrackerUnits = (size / NUM_BYTES_PER_UNIT) + ((size % NUM_BYTES_PER_UNIT) > 0 ? 1 : 0);
-	u32 numRequiredPages = size / CHUNK_SIZE + ((size % CHUNK_SIZE)>0 ? 1 : 0);
+	u32 numRequiredPages = size / CHUNK_SIZE + ((size % CHUNK_SIZE) > 0 ? 1 : 0);
 
 	// We must understand that pointer differences tell us the number of values stored in the particular object 
 	//  size. Hence multiplying it with the size gives us the true byte difference.
 	MEMORY_ADDRESS memoryOffset = ((MEMORY_ADDRESS*)pMemory - (MEMORY_ADDRESS*)m_pMemory ) * sizeof(MEMORY_ADDRESS);
-	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << (NUM_PAGES_PER_UNIT - numRequiredPages % NUM_PAGES_PER_UNIT)); 
+	TRACKER_UNIT partialBitMask = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << 
+												(NUM_PAGES_PER_UNIT - numRequiredPages % NUM_PAGES_PER_UNIT)); 
 	TRACKER_UNIT memoryBitMask  = (TRACKER_UNIT)(TRACKING_UNIT_ALL_USED << 
-												 ((memoryOffset % NUM_BYTES_PER_UNIT) / CHUNK_SIZE));
+												((memoryOffset % NUM_BYTES_PER_UNIT) / CHUNK_SIZE));
 	
 	u32 startTrackerID = memoryOffset / NUM_BYTES_PER_UNIT;
-	
+
 	if(partialBitMask != memoryBitMask) {
 		// There was adjustment, handle that
 		if(partialBitMask > memoryBitMask) {
@@ -334,14 +338,22 @@ void MemManager::DeAllocate(void *pMemory)
 			// Adjustment was to the right, that means there were more units remaining
 			//  so there was a reduction in the last 
 			u8 last_unshift_count=0;
-			do {
-				++last_unshift_count;
-				partialBitMask = partialBitMask | (partialBitMask >> 1);
-			} while (~trackerUnits[startTrackerID] != partialBitMask && 
-					 partialBitMask != TRACKING_UNIT_ALL_USED) ;
-			
-			if(partialBitMask == TRACKING_UNIT_ALL_USED) {
-				//cout<<" THis is an error.";
+			if (numRequiredTrackerUnits == 1) {
+				do {
+					partialBitMask >>= 1;
+				} while (~trackerUnits[startTrackerID] != partialBitMask && 
+						 partialBitMask != 0 &&
+						 !(partialBitMask & 1)) ;
+			} else {
+				do {
+					++last_unshift_count;
+					partialBitMask = partialBitMask | (partialBitMask >> 1);
+				} while (~trackerUnits[startTrackerID] != partialBitMask && 
+						 partialBitMask != TRACKING_UNIT_ALL_USED) ;
+			}
+
+			if (partialBitMask == TRACKING_UNIT_ALL_USED) {
+				//cout<<" This is an error.";
 				//break;
 			}
 			
@@ -354,7 +366,9 @@ void MemManager::DeAllocate(void *pMemory)
 			}
 
 			// For the last unit, mark using lastUnitBitMask
-			trackerUnits[numRequiredTrackerUnits-1] &= ~(TRACKING_UNIT_ALL_USED >> last_unshift_count);
+			if (numRequiredTrackerUnits > 1) {
+				trackerUnits[startTrackerID + numRequiredTrackerUnits - 1] &= ~(TRACKING_UNIT_ALL_USED >> last_unshift_count);
+			}
 		}
 
 	} else {
